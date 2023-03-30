@@ -4,6 +4,7 @@
 
 Написано для версии 26.0.4827.
 
+![alt text](https://github.com/SanyaClaus/MPSIEM-Telegram-notification/blob/main/preview.png?raw=true)
 
 client_secret для авторизации скрипта в SIEM можно взять в конфигурации Core (/var/lib/deployed-roles/mp10-application/core-##########/install.sh)
 
