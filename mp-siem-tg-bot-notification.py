@@ -3,10 +3,10 @@ import requests
 from datetime import datetime, timedelta
 import settings
 
-# отключение предупреждений SSL в консоль
+# Отключение предупреждений SSL в консоль
 requests.packages.urllib3.disable_warnings()
 
-# настройки
+# Импорт настроек
 pause_time = settings.pause_time
 time_zone = settings.time_zone
 username = settings.username
@@ -19,7 +19,7 @@ admin_chat_id = settings.admin_chat_id
 chat_ids = settings.chat_ids
 default_header = settings.default_header
 
-# служебные переменные
+# Служебные переменные
 bearer_token = None  # хранит полученный токен для связи с SIEM
 bearer_token_lifetime = None
 refresh_token = None  # хранит полученный refresh_token для обновления bearer_token
@@ -59,27 +59,7 @@ def get_bearer_token():
     return bearer_token
 
 
-# Обновление токена
-def get_bearer_refresh_token():
-    global bearer_token, refresh_token
-    url = base_url + ":3334/connect/token"
-    payload = "client_id=" + client_id + "&client_secret=" + client_secret \
-              + "&grant_type=refresh_token&response_type=code%20id_token&refresh_token=" + refresh_token
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Bearer undefined"
-    }
-
-    response = requests.request("POST", url, data=payload, headers=headers, verify=False)
-
-    if response.text.find("access_token"):
-        json_response = response.json()
-        bearer_token = json_response["access_token"]
-        refresh_token = json_response["refresh_token"]
-    return bearer_token
-
-
-# получение списка инцидентов
+# Получение списка инцидентов
 def get_incidents(bearer_token):
     global last_incident_time
     today = datetime.now()
@@ -130,7 +110,7 @@ def get_incidents(bearer_token):
     return response.json()['incidents']
 
 
-# превращение инцидента в строку
+# Превращение инцидента в строку
 def incident_to_string(incident):
     try:
         # время обрезается до формата, который удается распарсить, добавляется поправка на наш часовой пояс
@@ -165,13 +145,12 @@ def incident_to_string(incident):
 
         return "{4}\nВремя: {0}\nОпасность: {5}\nТип: {1}\nИмя: {2}\nСтатус: {3}" \
                "\n{6}".format(date, type, name, status, key, severity, events_str)
-        # return date + " - " + incident['type'] + " - " + incident['name']
     except Exception as ex:
         log("Ошибка при парсинге инцидента: " + str(ex))
         return "Не удалось распарсить инцидент"
 
 
-# найти события по id инцидента
+# Поиск событий по id инцидента
 def get_events_by_incident_id(incident_id):
     url = base_url + "/api/incidents/" + incident_id + "/events"
     payload = ""
@@ -183,18 +162,7 @@ def get_events_by_incident_id(incident_id):
     return response.json()
 
 
-def send_telegram_message(msg):
-    for id in chat_ids:
-        try:
-            response = requests.post("https://api.telegram.org/bot" + tg_bot_token + "/sendMessage",
-                                     data={'chat_id': id,
-                                           'text': msg})
-            if response.status_code == 200:
-                log("В чат {0} отправлено сообщение: {1}".format(id, msg).replace("\n", " \\ "))
-        except Exception as ex:
-            log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex))
-
-
+# Получение новых сообщений из Телеграм
 def get_telegram_updates(offset=0):
     try:
         response = requests.get("https://api.telegram.org/bot" + tg_bot_token + "/getUpdates?offset=" + str(offset))
@@ -207,6 +175,7 @@ def get_telegram_updates(offset=0):
         print("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectTimeout")
 
 
+# Парсинг входящих сообщений в Телеграм
 def check_new_chats():
     global last_update
     updates = get_telegram_updates(last_update)
@@ -255,6 +224,7 @@ def check_new_chats():
             send_telegram_message("Обнаружены новые пользователи бота: \n" + str_new_chats)
 
 
+# Отправка сообщения в Телеграм
 def send_telegram_message(msg, ids=[admin_chat_id]):
     for id in ids:
         try:
@@ -267,7 +237,7 @@ def send_telegram_message(msg, ids=[admin_chat_id]):
             print("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex))
 
 
-# основное тело скрипта
+# Основное тело скрипта
 send_telegram_message(msg="Бот запущен.")
 work = True
 while work:
