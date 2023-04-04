@@ -1,14 +1,14 @@
-# MPSIEM-Telegram-notification
+# MPSIEM-Telegram-notification-light
 
 Отправка инцидентов из MaxPatrol SIEM 10 в Telegram бот.
 
 Написано для версии 26.0.4827.
 
+Эта версия может отправлять оповещения об инцидентах только в один чат, указанный в настройках.
+
 ![alt text](https://github.com/SanyaClaus/MPSIEM-Telegram-notification/blob/main/preview.png?raw=true)
 
 ## Настройки
-
-В файле ```settings.py``` находятся настройки бота:
 
 - pause_time - время в секундах между проверками инцидентов
 - time_zone - часовой пояс (в SIEM события хранятся с временем по GMT+0, соответсвенно для отображения времени по Москве нужно задать +3 часа)
@@ -18,8 +18,7 @@
 - client_secret - ключ доступа к приложению в SIEM
 - base_url - url для входа в SIEM
 - tg_bot_token - токен Телеграм-бота
-- admin_chat_id - id чата с администратором в Телеграм
-- chat_ids - лист с id чатов в Телеграм, куда отсылать уведомления об инцидентах
+- chat_id - id чата с администратором в Телеграм
 - default_header - заголовок запросов, с которыми будет обращаться бот к SIEM
 
 
