@@ -173,6 +173,8 @@ def get_telegram_updates(offset=0):
             return 0
     except requests.exceptions.ConnectTimeout as ex:
         print("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectTimeout")
+    except requests.exceptions.ConnectionError as ex:
+        print("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectionError")
 
 
 # Парсинг входящих сообщений в Телеграм
@@ -241,31 +243,34 @@ def send_telegram_message(msg, ids=[admin_chat_id]):
 send_telegram_message(msg="Бот запущен.")
 work = True
 while work:
-    incidents = get_incidents(bearer_token=bearer_token)
-    # Если Unauthorised (случается при первом старте и при окончании действия токена)
-    if incidents == 401:
-        log("Не авторизован в SIEM, авторизуюсь.")
-        # Авторизоваться повторно
-        if not get_bearer_token():
-            send_telegram_message(msg="Не удалось авторизоваться в SIEM: не правильный логин/пароль.")
-            raise Exception("Не правильный логин/пароль")
-        continue
-    if len(incidents) > 0:
-        log("Найдены новые инциденты, пробую обработать их...")
-        try:
-            send_telegram_message(msg="Новые инциденты:")
-            for inc in reversed(incidents):
-                time.sleep(0.1)
-                send_telegram_message(msg=incident_to_string(inc), ids=chat_ids)
-                # чтобы получить в следующий раз только новые инциденты, в переменную last_incident_time
-                # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
-                # последний инцидент
-                last_incident_time = (
-                        datetime.fromisoformat(inc['created'][:23]) + timedelta(milliseconds=1)).isoformat()
-        except requests.exceptions.ConnectTimeout:
-            log("Не удалось отправить сообщение в Телеграм - ConnectTimeout")
-        time.sleep(pause_time)
-    else:
-        log("Не найдено новых инцидентов")
-        check_new_chats()
-        time.sleep(pause_time)
+    try:
+        incidents = get_incidents(bearer_token=bearer_token)
+        # Если Unauthorised (случается при первом старте и при окончании действия токена)
+        if incidents == 401:
+            log("Не авторизован в SIEM, авторизуюсь.")
+            # Авторизоваться повторно
+            if not get_bearer_token():
+                send_telegram_message(msg="Не удалось авторизоваться в SIEM: не правильный логин/пароль.")
+                raise Exception("Не правильный логин/пароль")
+            continue
+        if len(incidents) > 0:
+            log("Найдены новые инциденты, пробую обработать их...")
+            try:
+                send_telegram_message(msg="Новые инциденты:")
+                for inc in reversed(incidents):
+                    time.sleep(0.1)
+                    send_telegram_message(msg=incident_to_string(inc), ids=chat_ids)
+                    # чтобы получить в следующий раз только новые инциденты, в переменную last_incident_time
+                    # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
+                    # последний инцидент
+                    last_incident_time = (datetime.fromisoformat(inc['created'][:23])
+                                          + timedelta(milliseconds=1)).isoformat()
+            except requests.exceptions.ConnectTimeout:
+                log("Не удалось отправить сообщение в Телеграм - ConnectTimeout")
+            time.sleep(pause_time)
+        else:
+            log("Не найдено новых инцидентов")
+            check_new_chats()
+            time.sleep(pause_time)
+    except Exception as ex:
+        log(ex)
