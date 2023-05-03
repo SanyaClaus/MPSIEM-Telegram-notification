@@ -6,6 +6,9 @@ import settings
 # Отключение предупреждений SSL в консоль
 requests.packages.urllib3.disable_warnings()
 
+# Переопределение кол-ва попыток для запросов по URL
+requests.adapters.DEFAULT_RETRIES = 5
+
 # Импорт настроек
 pause_time = settings.pause_time
 time_zone = settings.time_zone
@@ -68,7 +71,7 @@ def get_incidents(bearer_token):
     if not last_incident_time:
         # используется заранее заданный отступ по дате
         last_incident_time = last_1d
-    log("Try to find incidents from time {0}, token {1}".format(last_incident_time, bearer_token))
+    log("Пробую найти инциденты от {0}, текущй токен {1}".format(last_incident_time, bearer_token))
 
     url = base_url + "/api/v2/incidents/"
     # фильтр инцидентов
@@ -165,16 +168,17 @@ def get_events_by_incident_id(incident_id):
 # Получение новых сообщений из Телеграм
 def get_telegram_updates(offset=0):
     try:
-        response = requests.get("https://api.telegram.org/bot" + tg_bot_token + "/getUpdates?offset=" + str(offset))
+        response = requests.get("https://api.telegram.org/bot" + tg_bot_token + "/getUpdates?offset=" + str(offset),
+                                timeout=4)
         if response.status_code == 200:
             response = response.json()
             return response
         else:
-            return 0
+            return None
     except requests.exceptions.ConnectTimeout as ex:
-        print("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectTimeout")
+        log("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectTimeout")
     except requests.exceptions.ConnectionError as ex:
-        print("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectionError")
+        log("Не удалось получить новые события из Телеграм (метод getUpdates) - ConnectionError")
 
 
 # Парсинг входящих сообщений в Телеграм
@@ -183,6 +187,8 @@ def check_new_chats():
     updates = get_telegram_updates(last_update)
     if updates is None:
         return 0
+    if len(updates['result']) == 0:
+        return 0
     log("Обнаружены новые сообщения к боту, обработка...")
     for up in updates["result"]:
         new_chats = []
@@ -190,8 +196,9 @@ def check_new_chats():
             last_update = up['update_id'] + 1
             type = str(up['message']['entities'][0]['type'])
             text = str(up["message"]["text"])
+            username = up["message"]["from"]["username"]
+            log("Входящее сообщение от {0}: {1}".format(username, text))
             if (type == "bot_command") and (text == "/start"):
-                username = up["message"]["from"]["username"]
                 chat_id = up["message"]["chat"]["id"]
                 new_chats.append([username, chat_id])
             elif (type == "bot_command") and ("/accept" in text[:7]):
@@ -224,6 +231,7 @@ def check_new_chats():
                 str_new_chats = str_new_chats + "@{0}\n(разрешить просмотр логов /accept{1}, " \
                                                 "игнорировать /deny{1}).\n".format(i[0], i[1])
             send_telegram_message("Обнаружены новые пользователи бота: \n" + str_new_chats)
+    log("... обработка закончена.")
 
 
 # Отправка сообщения в Телеграм
@@ -234,9 +242,10 @@ def send_telegram_message(msg, ids=[admin_chat_id]):
                                      data={'chat_id': id,
                                            'text': msg})
             if response.status_code == 200:
-                print("В чат {0} отправлено сообщение: {1}".format(id, msg).replace("\n", " \\ "))
+                log("В чат {0} отправлено сообщение: {1}".format(id, msg).replace("\n", " \\ "))
+            time.sleep(0.5)
         except Exception as ex:
-            print("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex))
+            log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex))
 
 
 # Основное тело скрипта
@@ -256,9 +265,9 @@ while work:
         if len(incidents) > 0:
             log("Найдены новые инциденты, пробую обработать их...")
             try:
-                send_telegram_message(msg="Новые инциденты:")
+                send_telegram_message(msg="Новые инциденты:", ids=chat_ids)
                 for inc in reversed(incidents):
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                     send_telegram_message(msg=incident_to_string(inc), ids=chat_ids)
                     # чтобы получить в следующий раз только новые инциденты, в переменную last_incident_time
                     # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
