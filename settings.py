@@ -17,3 +17,6 @@ default_header = {
         "Accept-Encoding": "gzip, deflate",
         "Accept": "*/*"
 }
+# file_id или ссылка на гифку для команды /ping
+ping_sticker = 'https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWEzNTNjNTY3MDBlZmNlZWVjYzlmODQwYTE2OGI3NWI1OWQ2O' \
+               'DQ2MiZlcD12MV9pbnRlcm5hbF9naWZzX2dpZklkJmN0PWc/20xGDkXD1EUDewVjXi/giphy.gif'
