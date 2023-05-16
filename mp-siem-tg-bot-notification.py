@@ -21,6 +21,8 @@ tg_bot_token = settings.tg_bot_token
 admin_chat_id = settings.admin_chat_id
 chat_ids = settings.chat_ids
 default_header = settings.default_header
+ping_sticker = settings.ping_sticker
+tg_updates_timeout = settings.tg_updates_timeout
 
 # Служебные переменные
 bearer_token = None  # хранит полученный токен для связи с SIEM
@@ -167,9 +169,11 @@ def get_events_by_incident_id(incident_id):
 
 # Получение новых сообщений из Телеграм
 def get_telegram_updates(offset=0):
+    global tg_updates_timeout
     try:
-        response = requests.get("https://api.telegram.org/bot" + tg_bot_token + "/getUpdates?offset=" + str(offset),
-                                timeout=4)
+        response = requests.get("https://api.telegram.org/bot" + tg_bot_token + "/getUpdates?offset=" + str(offset) +
+                                "&timeout=" + str(tg_updates_timeout),
+                                timeout=(tg_updates_timeout, tg_updates_timeout))
         if response.status_code == 200:
             response = response.json()
             return response
@@ -184,10 +188,13 @@ def get_telegram_updates(offset=0):
 # Парсинг входящих сообщений в Телеграм
 def check_new_chats():
     global last_update
+    log("Ожидаю сообщения в ТГ в течение {0} сек...".format(tg_updates_timeout))
     updates = get_telegram_updates(last_update)
     if updates is None:
+        log("Нет новых сообщений в ТГ.")
         return 0
     if len(updates['result']) == 0:
+        log("Нет новых сообщений в ТГ.")
         return 0
     log("Обнаружены новые сообщения к боту, обработка...")
     for up in updates["result"]:
@@ -197,12 +204,11 @@ def check_new_chats():
             type = str(up['message']['entities'][0]['type'])
             text = str(up["message"]["text"])
             username = up["message"]["from"]["username"]
+            chat_id = up["message"]["chat"]["id"]
             log("Входящее сообщение от {0}: {1}".format(username, text))
             if (type == "bot_command") and (text == "/start"):
-                chat_id = up["message"]["chat"]["id"]
                 new_chats.append([username, chat_id])
             elif (type == "bot_command") and ("/accept" in text[:7]):
-                chat_id = up["message"]["chat"]["id"]
                 if chat_id == admin_chat_id:
                     allow_chat_id = text[7:]
                     if allow_chat_id not in chat_ids:
@@ -215,7 +221,6 @@ def check_new_chats():
                     else:
                         send_telegram_message("Доступ уже был разрешен для чата {0}".format(allow_chat_id))
             elif (type == "bot_command") and ("/deny" in text[:5]):
-                chat_id = up["message"]["chat"]["id"]
                 if chat_id == admin_chat_id:
                     deny_chat_id = text[5:]
                     if deny_chat_id in chat_ids:
@@ -223,6 +228,8 @@ def check_new_chats():
                     # отправка сообщения администратору
                     send_telegram_message("Доступ запрещен, инциденты НЕ будут отправляться "
                                           "в чат {0}".format(deny_chat_id))
+            elif (type == "bot_command") and ("/ping" in text[:10]) and chat_id in chat_ids:
+                send_telegram_sticker(sticker_id=ping_sticker, ids=[chat_id])
         except KeyError:
             continue
         if len(new_chats):
@@ -248,38 +255,53 @@ def send_telegram_message(msg, ids=[admin_chat_id]):
             log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex))
 
 
+# Отправка стикера или gif-ки в Телеграм
+def send_telegram_sticker(sticker_id, ids=[admin_chat_id]):
+    for id in ids:
+        try:
+            response = requests.post("https://api.telegram.org/bot" + tg_bot_token + "/sendSticker",
+                                     data={'chat_id': id,
+                                           'sticker': sticker_id})
+            if response.status_code == 200:
+                log("В чат {0} отправлен стикер или гифка: {1}".format(id, sticker_id).replace("\n", " \\ "))
+        except Exception as ex:
+            log("Не удалось отправить стикер или гифку в чат {0}: {1}".format(id, ex))
+
+
 # Основное тело скрипта
-send_telegram_message(msg="Бот запущен.")
-work = True
-while work:
-    try:
-        incidents = get_incidents(bearer_token=bearer_token)
-        # Если Unauthorised (случается при первом старте и при окончании действия токена)
-        if incidents == 401:
-            log("Не авторизован в SIEM, авторизуюсь.")
-            # Авторизоваться повторно
-            if not get_bearer_token():
-                send_telegram_message(msg="Не удалось авторизоваться в SIEM: не правильный логин/пароль.")
-                raise Exception("Не правильный логин/пароль")
-            continue
-        if len(incidents) > 0:
-            log("Найдены новые инциденты, пробую обработать их...")
-            try:
-                send_telegram_message(msg="Новые инциденты:", ids=chat_ids)
-                for inc in reversed(incidents):
-                    time.sleep(0.5)
-                    send_telegram_message(msg=incident_to_string(inc), ids=chat_ids)
-                    # чтобы получить в следующий раз только новые инциденты, в переменную last_incident_time
-                    # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
-                    # последний инцидент
-                    last_incident_time = (datetime.fromisoformat(inc['created'][:23])
-                                          + timedelta(milliseconds=1)).isoformat()
-            except requests.exceptions.ConnectTimeout:
-                log("Не удалось отправить сообщение в Телеграм - ConnectTimeout")
-            time.sleep(pause_time)
-        else:
-            log("Не найдено новых инцидентов")
-            check_new_chats()
-            time.sleep(pause_time)
-    except Exception as ex:
-        log(ex)
+if __name__ == "__main__":
+    send_telegram_message(msg="Бот запущен.")
+    work = True
+    while work:
+        try:
+            incidents = get_incidents(bearer_token=bearer_token)
+            # Если Unauthorised (случается при первом старте и при окончании действия токена)
+            if incidents == 401:
+                log("Не авторизован в SIEM, авторизуюсь.")
+                # Авторизоваться повторно
+                if not get_bearer_token():
+                    send_telegram_message(msg="Не удалось авторизоваться в SIEM: не правильный логин/пароль.")
+                    raise Exception("Не правильный логин/пароль")
+                continue
+            if len(incidents) > 0:
+                log("Найдены новые инциденты, пробую обработать их...")
+                try:
+                    send_telegram_message(msg="Новые инциденты:", ids=chat_ids)
+                    for inc in reversed(incidents):
+                        time.sleep(0.5)
+                        send_telegram_message(msg=incident_to_string(inc), ids=chat_ids)
+                        # чтобы получить в следующий раз только новые инциденты, в переменную last_incident_time
+                        # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
+                        # последний инцидент
+                        last_incident_time = (datetime.fromisoformat(inc['created'][:23])
+                                              + timedelta(milliseconds=1)).isoformat()
+                except requests.exceptions.ConnectTimeout:
+                    log("Не удалось отправить сообщение в Телеграм - ConnectTimeout")
+                time.sleep(pause_time)
+            else:
+                log("Не найдено новых инцидентов")
+                time.sleep(pause_time)
+                check_new_chats()
+                # time.sleep(pause_time)
+        except Exception as ex:
+            log(ex)
