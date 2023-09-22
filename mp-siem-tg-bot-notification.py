@@ -294,7 +294,7 @@ if __name__ == "__main__":
                         # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
                         # последний инцидент
                         last_incident_time = (datetime.fromisoformat(inc['created'][:23])
-                                              + timedelta(milliseconds=1)).isoformat()
+                                              + timedelta(milliseconds=1)).isoformat() + 'Z'
                 except requests.exceptions.ConnectTimeout:
                     log("Не удалось отправить сообщение в Телеграм - ConnectTimeout")
                 time.sleep(pause_time)
