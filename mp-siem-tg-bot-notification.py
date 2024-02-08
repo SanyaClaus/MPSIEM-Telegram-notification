@@ -176,7 +176,7 @@ def get_telegram_updates(offset=0):
     try:
         response = requests.get("https://api.telegram.org/bot" + settings.tg_bot_token + "/getUpdates?offset="
                                 + str(offset) + "&timeout=" + str(settings.tg_updates_timeout),
-                                timeout=(settings.tg_updates_timeout, settings.tg_updates_timeout)
+                                timeout=(settings.tg_updates_timeout+1, settings.tg_updates_timeout+1)
                                 )
         if response.status_code == 200:
             response = response.json()
@@ -247,7 +247,8 @@ def check_new_chats():
                           f"Последние логи: \n{logger}"
                     send_telegram_message(msg=msg)
         except KeyError:
-            log("Не удалось найти один из параметров сообщения, скорее всего это была не /команда")
+            log("Не удалось найти один из параметров сообщения, скорее всего это была не /команда. "
+                "Проблемный update: \n{0}".format(up))
             try:
                 # TODO: оно одинаково реагирует на добавление в чат и удаление из чата
                 chat_id = up['my_chat_member']['chat']['id']
@@ -345,4 +346,5 @@ if __name__ == "__main__":
                 check_new_chats()
         except Exception as ex:
             log(ex)
+            send_telegram_message(msg="Произошла непредвиденная ошибка, бот остановлен.\n{0}".format(ex))
             raise
