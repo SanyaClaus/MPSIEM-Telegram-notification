@@ -38,6 +38,9 @@ tg_updates_timeout = 10
 # ID чата с администратором в Телеграм
 admin_chat_id = 123456789
 
+# Максимальное число отображаемых событий на инцидент
+max_events_count = 5
+
 # Header по умолчанию при обращениях к SIEM
 default_header = {
     "User-Agent": "python-tg-bot",

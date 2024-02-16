@@ -116,42 +116,48 @@ def get_incidents(token):
 def incident_to_string(incident):
     try:
         # время обрезается до формата, который удается распарсить, добавляется поправка на наш часовой пояс
-        date = (datetime.fromisoformat(incident['created'][:23]) + settings.time_zone).strftime("%Y.%m.%d %H:%M:%S")
-        id = incident['id']
-        key = incident['key']
-        severity = incident['severity']
-        type = incident['type']
-        name = incident['name']
-        status = incident['status']
-        link = f'{settings.base_url}/#/incident/incidents/view/{id}'
+        inc_date = (datetime.fromisoformat(incident['created'][:23]) + settings.time_zone).strftime("%Y.%m.%d %H:%M:%S")
+        inc_id = incident['id']
+        inc_key = incident['key']
+        inc_severity = incident['severity']
+        inc_type = incident['type']
+        inc_name = incident['name']
+        inc_status = incident['status']
+        inc_link = f'{settings.base_url}/#/incident/incidents/view/{inc_id}'
 
         # к обозначению опасности добавляю цветной эмодзи для наглядности
-        if severity == "High":
-            severity = "Высокая 🔴"
-        elif severity == "Medium":
-            severity = "Средняя 🟠"
-        elif severity == "Low":
-            severity = "Низкая 🟡"
+        if inc_severity == "High":
+            inc_severity = "Высокая 🔴"
+        elif inc_severity == "Medium":
+            inc_severity = "Средняя 🟠"
+        elif inc_severity == "Low":
+            inc_severity = "Низкая 🟡"
 
         # получение событий по инциденту
-        events = get_events_by_incident_id(incident_id=id)
+        events = get_events_by_incident_id(incident_id=inc_id)
         events_str = "\nИнцидент без событий"
         # если есть события
         if len(events) > 0:
             events_str = "\nСобытия по инциденту: \n\n"
-            # распарсить события в строку events_str
+            ev_number = 0
+            # парсинг событий в строку events_str
             for ev in events:
+                ev_number += 1
                 ev_date = (datetime.fromisoformat(ev['date'][:23]) + settings.time_zone).strftime("%Y.%m.%d %H:%M:%S")
                 ev_description = ev['description']
                 ev_str = "Дата: {0}\nСобытие: {1}".format(ev_date, ev_description)
                 events_str = events_str + ev_str + "\n\n"
-        result_string = f"{key}\n" \
-                        f"Время: {date}\n" \
-                        f"Опасность: {severity}\n" \
-                        f"Тип: {type}\n" \
-                        f"Имя: {name}\n" \
-                        f"Статус: {status}\n" \
-                        f"Ссылка на инцидент: {link}" \
+                # если обработали нужное число событий - остановиться
+                if ev_number == settings.max_events_count:
+                    events_str = events_str + "И еще {0} событий.".format(len(events) - ev_number)
+                    break
+        result_string = f"{inc_key}\n" \
+                        f"Время: {inc_date}\n" \
+                        f"Опасность: {inc_severity}\n" \
+                        f"Тип: {inc_type}\n" \
+                        f"Имя: {inc_name}\n" \
+                        f"Статус: {inc_status}\n" \
+                        f"Ссылка на инцидент: {inc_link}" \
                         f"\n{events_str}"
         return result_string
     except Exception as ex_parse:
@@ -207,16 +213,17 @@ def check_new_chats():
     for up in updates["result"]:
         try:
             last_update.set(up["update_id"] + 1)
-            type = str(up["message"]["entities"][0]["type"])
-            text = str(up["message"]["text"])
-            username = up["message"]["from"]["username"]
-            chat_id = up["message"]["chat"]["id"]
-            log("Входящее сообщение от {0}: {1}".format(username, text))
-            if (type == "bot_command") and (text == "/start"):
-                new_chats.append([username, chat_id])
-            elif (type == "bot_command") and ("/accept" in text[:7]):
-                if chat_id == settings.admin_chat_id:
-                    allow_chat_id = text[7:]
+            up_type = str(up["message"]["entities"][0]["type"])
+            up_text = str(up["message"]["text"])
+            up_username = up["message"]["from"]["username"] if "username" in up["message"]["from"] \
+                else up["message"]["from"]["id"]
+            up_chat_id = up["message"]["chat"]["id"]
+            log("Входящее сообщение от {0}: {1}".format(up_username, up_text))
+            if (up_type == "bot_command") and (up_text == "/start"):
+                new_chats.append([up_username, up_chat_id])
+            elif (up_type == "bot_command") and ("/accept" in up_text[:7]):
+                if up_chat_id == settings.admin_chat_id:
+                    allow_chat_id = up_text[7:]
                     if allow_chat_id not in chat_ids.get():
                         if chat_ids.append(allow_chat_id):
                             # отправка сообщения администратору
@@ -229,18 +236,18 @@ def check_new_chats():
                                                   "Значение добавлено во временную переменную до перезапуска.")
                     else:
                         send_telegram_message("Доступ уже был разрешен для чата {0}".format(allow_chat_id))
-            elif (type == "bot_command") and ("/deny" in text[:5]):
-                if chat_id == settings.admin_chat_id:
-                    deny_chat_id = text[5:]
+            elif (up_type == "bot_command") and ("/deny" in up_text[:5]):
+                if up_chat_id == settings.admin_chat_id:
+                    deny_chat_id = up_text[5:]
                     if deny_chat_id in chat_ids.get():
                         chat_ids.remove(deny_chat_id)
                     # отправка сообщения администратору
                     send_telegram_message("Доступ запрещен, инциденты НЕ будут отправляться "
                                           "в чат {0}".format(deny_chat_id))
-            elif (type == "bot_command") and ("/ping" in text[:10]) and chat_id in chat_ids:
-                send_telegram_sticker(sticker_id=settings.ping_sticker, ids=[chat_id])
-            elif (type == "bot_command") and ("/debug" in text[:6]):
-                if chat_id == settings.admin_chat_id:
+            elif (up_type == "bot_command") and ("/ping" in up_text[:10]) and up_chat_id in chat_ids:
+                send_telegram_sticker(sticker_id=settings.ping_sticker, ids=[up_chat_id])
+            elif (up_type == "bot_command") and ("/debug" in up_text[:6]):
+                if up_chat_id == settings.admin_chat_id:
                     msg = f"last_incident_time = {last_incident_time.get()}\n" \
                           f"last_update = {last_update.get()}\n" \
                           f"chat_ids = {chat_ids.get()}\n" \
@@ -251,12 +258,12 @@ def check_new_chats():
                 "Проблемный update: \n{0}".format(up))
             try:
                 # TODO: оно одинаково реагирует на добавление в чат и удаление из чата
-                chat_id = up['my_chat_member']['chat']['id']
+                up_chat_id = up['my_chat_member']['chat']['id']
                 chat_name = up['my_chat_member']['chat']['title']
-                log(f"Бот был добавлен или удален из чата {chat_id}")
-                new_chats.append([chat_name, chat_id])
-            except Exception:
-                log("И не добавление в чат.")
+                log(f"Бот был добавлен или удален из чата {up_chat_id}")
+                new_chats.append([chat_name, up_chat_id])
+            except Exception as ex_add_chat:
+                log("И не добавление в чат.\r{0}".format(ex_add_chat))
             continue
         except NameError:
             log("Не удалось найти один из параметров сообщения, скорее всего это была не /команда")
@@ -271,25 +278,31 @@ def check_new_chats():
 
 
 # Отправка сообщения в Телеграм
-def send_telegram_message(msg, ids=[settings.admin_chat_id]):
+def send_telegram_message(msg, ids=None):
     # Цикл отправляет сообщения всем перечисленным в ids пользователям
+    # Если пользователь не указан, отправляет сообщение администратору
+    if ids is None:
+        ids = [settings.admin_chat_id]
     for id in ids:
         try:
             response = requests.post("https://api.telegram.org/bot" + settings.tg_bot_token + "/sendMessage",
                                      data={'chat_id': id,
-                                           'text': msg})
+                                           'text': msg[:4096]})
             if response.status_code == 200:
                 log("В чат {0} отправлено сообщение: {1}".format(id, msg).replace("\n", " \\ "))
             else:
                 log("Не удалось отправить сообщение в чат {0}. Ошибка: {1}".format(id, response).replace("\n", " \\ "))
             # Задержка нужна, чтобы не выйти за ограничения Телеграма (антиспам)
             time.sleep(0.4)
-        except Exception as ex:
-            log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex))
+        except Exception as ex_send_tg_msg:
+            log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex_send_tg_msg))
 
 
 # Отправка стикера или gif-ки в Телеграм
-def send_telegram_sticker(sticker_id, ids=[settings.admin_chat_id]):
+def send_telegram_sticker(sticker_id, ids=None):
+    # Если пользователь не указан, отправляет сообщение администратору
+    if ids is None:
+        ids = [settings.admin_chat_id]
     for id in ids:
         try:
             response = requests.post("https://api.telegram.org/bot" + settings.tg_bot_token + "/sendSticker",
@@ -297,8 +310,8 @@ def send_telegram_sticker(sticker_id, ids=[settings.admin_chat_id]):
                                            'sticker': sticker_id})
             if response.status_code == 200:
                 log("В чат {0} отправлен стикер или гифка: {1}".format(id, sticker_id).replace("\n", " \\ "))
-        except Exception as ex:
-            log("Не удалось отправить стикер или гифку в чат {0}: {1}".format(id, ex))
+        except Exception as ex_send_tg_sticker:
+            log("Не удалось отправить стикер или гифку в чат {0}: {1}".format(id, ex_send_tg_sticker))
 
 
 # Основное тело скрипта
@@ -327,8 +340,8 @@ if __name__ == "__main__":
                         time.sleep(0.5)
                         send_telegram_message(msg=incident_to_string(inc), ids=chat_ids.get())
                         # чтобы получить в следующий раз только новые инциденты, в переменную last_incident_time
-                        # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить из проверки
-                        # последний инцидент
+                        # устанавливается время последнего найденного инцидента + 1 миллисекунда, чтобы исключить
+                        # из проверки последний инцидент
                         new_last_inc_time = (datetime.fromisoformat(inc['created'][:23])
                                              + timedelta(milliseconds=1)).isoformat() + 'Z'
                         log("Try to set last_incident_time = {0}".format(new_last_inc_time))
