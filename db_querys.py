@@ -30,6 +30,12 @@ user_allowed_get = """SELECT tg_id FROM tg_users_allowed;"""
 
 user_allowed_delete = """DELETE FROM tg_users_allowed WHERE tg_id='{0}';"""
 
+user_banned_insert = """INSERT INTO "main"."tg_users_denied" ("tg_id") VALUES ('{0}');"""
+
+user_banned_get = """SELECT tg_id FROM tg_users_denied;"""
+
+user_banned_delete = """DELETE FROM tg_users_denied WHERE tg_id='{0}';"""
+
 last_incident_time_get = """SELECT value FROM variables WHERE name='last_incident_time';"""
 
 last_incident_time_set = """UPDATE variables set value = "{0}" WHERE name = 'last_incident_time';"""
