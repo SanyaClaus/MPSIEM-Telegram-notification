@@ -472,6 +472,8 @@ def check_new_chats():
                     elif 'ignore' in callback_data[:6]:
                         ignored_chat_id = callback_data[6:]
                         log(f"Администратор проигнорировал чат {ignored_chat_id}")
+                        text = f"Вы проигнорировали чат с id {ignored_chat_id} {datetime.now()}"
+                        tg_edit_message(msg=text, chat_id=callback_chat_id, message_id=callback_message_id)
                     elif 'ban' in callback_data[:3]:
                         if callback_user_id == settings.admin_chat_id:
                             ban_chat_id = callback_data[3:]
