@@ -26,7 +26,7 @@ client_id = "mpx"
 # secret пользователя в SIEM
 client_secret = "cccccccc-dddd-3333-4444-eeeeeeeeeeee"
 
-# URL для входа в SIEM
+# URL для входа в SIEM. В конце строки не должно быть символа /
 base_url = "https://siem.local"
 
 # Токен Телеграм-бота
@@ -36,7 +36,13 @@ tg_bot_token = "0123456789:AAAAAAAAAAAAAAAAAAA_BCDEFGHIJKLMNOP"
 tg_updates_timeout = 10
 
 # ID чата с администратором в Телеграм
-admin_chat_id = 123456789
+tg_admin_chat_id = 123456789
+
+# Список прокси для связи с Телеграм. Оставить пустым {}, чтобы не использовать прокси
+tg_proxys = {
+    "http":  "http://10.0.0.1:8090",
+    "https": "http://10.0.0.1:8090",
+}
 
 # Максимальное число отображаемых событий на инцидент
 max_events_count = 5
