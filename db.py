@@ -113,12 +113,12 @@ def connection_init():
         log("Файл с БД бота не найден")
         # создание пустого файла
         open(settings.dbFileName, "w").close()
-        db_connect = sqlite3.connect(settings.dbFileName)  # settings.dbFileName)
+        db_connect = sqlite3.connect(settings.dbFileName)
         db_cursor = db_connect.cursor()
         db_cursor.executescript(db_querys.tables_create)
         db_cursor.close()
         log("Файл с БД бота создан")
-    db_connect = sqlite3.connect(settings.dbFileName)  # settings.dbFileName)
+    db_connect = sqlite3.connect(settings.dbFileName)
     db_cursor = db_connect.cursor()
     check_tables(db_cursor)
     return db_connect, db_cursor
