@@ -22,7 +22,7 @@
 - password - пароль пользователя в SIEM
 - client_id - идентификатор приложения (mpx, ptkb)
 - client_secret - ключ доступа к приложению в SIEM
-- base_url - url для входа в SIEM
+- base_url - url для входа в SIEM (строго без символа / в конце строки)
 - tg_bot_token - токен Телеграм-бота
 - tg_updates_timeout - время ожидания новых событий в Телеграм
 - admin_chat_id - id чата с администратором в Телеграм
@@ -40,8 +40,8 @@ tg_bot_token для работы бота можно получить у https:/
 
 Запуск скрипта возможен как на удаленной машине, так и на машине с SIEM. Скрипт одинаково работает как на Windows, так и на Unix-подобной системе. Работоспособность проверена на Python 3.7 и Python 3.10.
 
-Для запуска по SSH рекомендую использовать следующую команду: 
-```nohup python3 mp-siem-tg-bot-notification.py &```
+Для первого запуска по SSH рекомендую использовать следующую команду: 
+```python3 mp-siem-tg-bot-notification.py```
 
 При первом запуске файл БД будет создан автоматически по пути, указанному в параметре dbFileName в файле ```settings.py```.
 
@@ -58,6 +58,35 @@ tg_bot_token для работы бота можно получить у https:/
 Для включения администратора в список рассылки новых инцидентов он тоже должен включить себя в него командой ```/accept123456789```.
 
 Для ускорения этого процесса администратор может просто отправить повторно команду ```/start```, после чего он получит описанное ранее сообщение с возможностью добавить себя в список рассылки.
+
+Для дальнейшей работы под Linux рекомендуется запуск бота в качестве сервиса, например создав файл ```/etc/systemd/system/mp-siem-tg.service```:
+
+```
+[Unit]
+Description=A script for send incedents from SIEM to Telegram
+After=network.target
+
+[Service]
+WorkingDirectory=/указать путь к каталогу со скриптом/
+ExecStart=/указать путь к используемой версии питона/python3 mp-siem-tg-bot-notification.py
+
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Затем перечитать конфигурационные файлы сервисов командой ```systemctl daemon-reload```.
+
+Теперь работать с сервисом можно как и с другими сервисами:
+
+```
+systemctl enable mp-siem-tg.service # включить автостарт
+systemctl start mp-siem-tg.service  # запуск сервиса
+systemctl status mp-siem-tg.service # статус сервиса
+systemctl stop mp-siem-tg.service   # остановка сервиса
+```
 
 ## Работа бота
 
