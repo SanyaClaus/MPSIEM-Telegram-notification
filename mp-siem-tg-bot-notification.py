@@ -221,7 +221,8 @@ def tg_get_updates(offset=0):
     try:
         response = requests.get("https://api.telegram.org/bot" + settings.tg_bot_token + "/getUpdates?offset="
                                 + str(offset) + "&timeout=" + str(settings.tg_updates_timeout),
-                                timeout=(settings.tg_updates_timeout + 1, settings.tg_updates_timeout + 1)
+                                timeout=(settings.tg_updates_timeout + 1, settings.tg_updates_timeout + 1),
+                                proxies=settings.proxys
                                 )
         if response.status_code == 200:
             response = response.json()
@@ -516,35 +517,44 @@ def check_new_chats():
                                f"⛔️ Заблокировать - больше не получать запросы на доступ этого чата."
             new_chat_keyboard = generate_chat_keyboard(chat_id=new_chat_id)
             tg_send_message(msg=new_chat_message, reply_markup=new_chat_keyboard, parse_mode="Markdown")
-        # tg_send_message("Обнаружены новые пользователи бота: \n" + str_new_chats)
     log("... обработка закончена.")
 
 
 # Отправка сообщения в Телеграм
-def tg_send_message(msg, ids=None, reply_markup=None, parse_mode=None):
+def tg_send_message(msg, ids=None, reply_markup=None, parse_mode=None, max_retries=3):
     # Цикл отправляет сообщения всем перечисленным в ids пользователям
     # Если пользователь не указан, отправляет сообщение администратору
     if ids is None:
         ids = [settings.admin_chat_id]
     for id in ids:
-        try:
-            data = {
-                'chat_id': id,
-                'text': msg[:4096],
-                'parse_mode': parse_mode
-            }
-            if reply_markup is not None:
-                data.update({'reply_markup': reply_markup})
-            response = requests.post("https://api.telegram.org/bot" + settings.tg_bot_token + "/sendMessage",
-                                     data=data, timeout=5)
-            if response.status_code == 200:
-                log("В чат {0} отправлено сообщение: {1}".format(id, msg).replace("\n", " \\ "))
-            else:
-                log("Не удалось отправить сообщение в чат {0}. Ошибка: {1}".format(id, response).replace("\n", " \\ "))
-            # Задержка нужна, чтобы не выйти за ограничения Телеграма (антиспам)
-            time.sleep(0.4)
-        except Exception as ex_send_tg_msg:
-            log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex_send_tg_msg))
+        for attempt in range(max_retries):
+            try:
+                data = {
+                    'chat_id': id,
+                    'text': msg[:4096],
+                    'parse_mode': parse_mode
+                }
+                if reply_markup is not None:
+                    data.update({'reply_markup': reply_markup})
+                response = requests.post("https://api.telegram.org/bot" + settings.tg_bot_token + "/sendMessage",
+                                         data=data, timeout=5, proxies=settings.proxys)
+                if response.status_code == 200:
+                    log("В чат {0} отправлено сообщение: {1}".format(id, msg).replace("\n", " \\ "))
+                else:
+                    log("Не удалось отправить сообщение в чат {0}. Ошибка: {1}".format(id, response).replace("\n", " \\ "))
+                # Задержка нужна, чтобы не выйти за ограничения Телеграма (антиспам)
+                time.sleep(0.4)
+                break
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as ex_send_tg_msg:
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                else:
+                    log("За {2} попытки(-ок) не удалось отправить сообщение в чат {0}: {1}".format(id,
+                                                                                                   ex_send_tg_msg,
+                                                                                                   max_retries))
+            except Exception as ex_send_tg_msg:
+                log("Не удалось отправить сообщение в чат {0}: {1}".format(id, ex_send_tg_msg))
 
 
 # Отправка стикера или gif-ки в Телеграм
@@ -556,7 +566,9 @@ def tg_send_sticker(sticker_id, ids=None):
         try:
             response = requests.post("https://api.telegram.org/bot" + settings.tg_bot_token + "/sendSticker",
                                      data={'chat_id': id,
-                                           'sticker': sticker_id})
+                                           'sticker': sticker_id},
+                                     proxies=settings.proxys
+            )
             if response.status_code == 200:
                 log("В чат {0} отправлен стикер или гифка: {1}".format(id, sticker_id).replace("\n", " \\ "))
         except Exception as ex_send_tg_sticker:
@@ -570,7 +582,8 @@ def tg_edit_message(msg, chat_id, message_id, reply_markup=None):
                                  data={'chat_id': chat_id,
                                        'message_id': message_id,
                                        'text': msg,
-                                       'reply_markup': reply_markup})
+                                       'reply_markup': reply_markup},
+                                 proxies=settings.proxys)
         if response.status_code == 200:
             log("Изменили сообщение с id {0}".format(message_id))
         else:
@@ -588,7 +601,8 @@ def tg_answer_callback(callback_query_id, text=None, show_alert=False, url=None,
                                        'show_alert': show_alert,
                                        'url': url,
                                        'cache_time': cache_time
-                                       })
+                                       },
+                                 proxies=settings.proxys)
         if response.status_code == 200:
             log("Отправлен answerCallbackQuery: {0}".format(text))
         else:
